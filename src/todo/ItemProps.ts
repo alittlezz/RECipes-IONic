@@ -1,6 +1,7 @@
 export interface ItemProps {
-  id?: string;
+  _id?: string;
   name: string;
   description: string;
+  isGood: boolean;
   calories: string;
 }

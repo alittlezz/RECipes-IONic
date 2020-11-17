@@ -1,11 +1,14 @@
 import axios from 'axios';
-import { getLogger } from '../core';
+import {authConfig, getLogger} from '../core';
 import { ItemProps } from './ItemProps';
+import {Plugins} from "@capacitor/core";
+
+const {Storage} = Plugins;
 
 const log = getLogger('itemApi');
 
 const baseUrl = 'localhost:3000';
-const itemUrl = `http://${baseUrl}/item`;
+const itemUrl = `http://${baseUrl}/api/item`;
 
 interface ResponseProps<T> {
   data: T;
@@ -30,33 +33,61 @@ const config = {
   }
 };
 
-export const getItems: () => Promise<ItemProps[]> = () => {
-  return withLogs(axios.get(itemUrl, config), 'getItems');
+export const getItems: (token: string, offset: number, size: number, isGood: boolean | undefined, searchName: string) => Promise<ItemProps[]> = (token, offset, size, isGood, searchName) => {
+  const result = axios.get(itemUrl + `?offset=${offset}&size=${size}&isGood=${isGood}&nameFilter=${searchName}`, authConfig(token));
+  result.then(function (result) {
+    console.log("Entering itemApi - getItems - No Network Will Throw HERE!");
+    result.data.forEach(async (item: ItemProps) => {
+      await Storage.set({
+        key: String(item._id!),
+        value: JSON.stringify(item),
+      });
+    });
+  })
+
+  return withLogs(result, 'getItems');
 }
 
-export const createItem: (item: ItemProps) => Promise<ItemProps[]> = item => {
-  return withLogs(axios.post(itemUrl, item, config), 'createItem');
+export const createItem: (token: string, item: ItemProps) => Promise<ItemProps[]> = (token, item) => {
+  const result = axios.post(itemUrl, item, authConfig(token));
+  result.then(async function (result) {
+    await Storage.set({
+      key: result.data._id!,
+      value: JSON.stringify(result.data),
+    });
+  });
+  return withLogs(result, 'createItem');
 }
 
-export const updateItem: (item: ItemProps) => Promise<ItemProps[]> = item => {
-  return withLogs(axios.put(`${itemUrl}/${item.id}`, item, config), 'updateItem');
+export const updateItem: (token: string, item: ItemProps) => Promise<ItemProps[]> = (token, item) => {
+  const result = axios.put(`${itemUrl}/${item._id}`, item, authConfig(token));
+  result.then(async function (result) {
+    await Storage.set({
+      key: result.data._id!,
+      value: JSON.stringify(result.data),
+    });
+  });
+  return withLogs(result, 'updateItem');
 }
 
-export const deleteItem: (id: string) => Promise<ItemProps[]> = id => {
-  return withLogs(axios.delete(`${itemUrl}/${id}`, config), 'deleteItem');
+export const deleteItem: (token: string, itemID: string) => Promise<ItemProps[]> = (token, itemID) => {
+  const result = axios.delete(`${itemUrl}/${itemID}`, authConfig(token));
+  result.then(async function () {
+    await Storage.remove({key: String(itemID!)});
+  });
+  return withLogs(result, 'deleteItem');
 }
 
 interface MessageData {
-  event: string;
-  payload: {
-    item: ItemProps;
-  };
+  type: string;
+  payload: ItemProps;
 }
 
-export const newWebSocket = (onMessage: (data: MessageData) => void) => {
+export const newWebSocket = (token: string, onMessage: (data: MessageData) => void) => {
   const ws = new WebSocket(`ws://${baseUrl}`)
   ws.onopen = () => {
     log('web socket onopen');
+    ws.send(JSON.stringify({type: 'authorization', payload: {token}}));
   };
   ws.onclose = () => {
     log('web socket onclose');

@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import {
   IonButton,
-  IonButtons,
+  IonButtons, IonCheckbox,
   IonContent,
   IonHeader,
   IonInput,
@@ -18,7 +18,7 @@ import { ItemProps } from './ItemProps';
 const log = getLogger('ItemEdit');
 
 interface ItemEditProps extends RouteComponentProps<{
-  id?: string;
+  _id?: string;
 }> {}
 
 const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
@@ -26,20 +26,22 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [calories, setCalories] = useState('');
+  const [isGood, setIsGood] = useState(false);
   const [item, setItem] = useState<ItemProps>();
   useEffect(() => {
     log('useEffect');
-    const routeId = match.params.id || '';
-    const item = items?.find(it => it.id === routeId);
+    const routeId = match.params._id || '';
+    const item = items?.find(it => it._id === routeId);
     setItem(item);
     if (item) {
       setName(item.name);
       setDescription(item.description);
       setCalories(item.calories.toString());
+      setIsGood(item.isGood);
     }
-  }, [match.params.id, items]);
+  }, [match.params._id, items]);
   const handleSave = () => {
-    const editedItem = item ? { ...item, name, description, calories } : { name, description, calories };
+    const editedItem = item ? { ...item, name, description, isGood, calories } : { name, description, isGood, calories };
     saveItem && saveItem(editedItem).then(() => history.goBack());
   };
   log('render');
@@ -60,6 +62,8 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
         <IonInput value={name} onIonChange={e => setName(e.detail.value || '')} />
         <IonTitle>Description</IonTitle>
         <IonInput value={description} onIonChange={e => setDescription(e.detail.value || '')} />
+        <IonTitle>Is good</IonTitle>
+        <IonCheckbox checked={isGood} onIonChange={e => setIsGood(e.detail.checked)} />
         <IonTitle>Calories</IonTitle>
         <IonInput value={calories} onIonChange={e => setCalories(e.detail.value || '')} />
         <IonLoading isOpen={saving} />

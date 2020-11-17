@@ -1,6 +1,6 @@
-import React from 'react';
+import React, {useState} from 'react';
 import { Redirect, Route } from 'react-router-dom';
-import { IonApp, IonRouterOutlet } from '@ionic/react';
+import {IonApp, IonRouterOutlet, useIonViewWillEnter} from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
 import { ItemEdit, ItemList } from './todo';
 
@@ -23,20 +23,24 @@ import '@ionic/react/css/display.css';
 /* Theme variables */
 import './theme/variables.css';
 import { ItemProvider } from './todo/ItemProvider';
+import {AuthProvider, Login, PrivateRoute} from "./auth";
 
-const App: React.FC = () => (
-  <IonApp>
-    <ItemProvider>
-      <IonReactRouter>
-        <IonRouterOutlet>
-          <Route path="/items" component={ItemList} exact={true} />
-          <Route path="/item" component={ItemEdit} exact={true} />
-          <Route path="/item/:id" component={ItemEdit} exact={true} />
-          <Route exact path="/" render={() => <Redirect to="/items" />} />
-        </IonRouterOutlet>
-      </IonReactRouter>
-    </ItemProvider>
-  </IonApp>
-);
+const App: React.FC = () => {
+  return (<IonApp>
+    <IonReactRouter>
+      <IonRouterOutlet>
+        <AuthProvider>
+          <Route exact path="/login" component={Login}/>
+          <ItemProvider>
+            <PrivateRoute path="/items" component={ItemList} exact={true}/>
+            <PrivateRoute path="/item" component={ItemEdit} exact={true}/>
+            <PrivateRoute path="/item/:_id" component={ItemEdit} exact={true}/>
+          </ItemProvider>
+          <Route exact path="/" render={() => <Redirect to="/items"/>}/>
+        </AuthProvider>
+      </IonRouterOutlet>
+    </IonReactRouter>
+  </IonApp>)
+};
 
 export default App;
