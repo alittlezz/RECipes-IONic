@@ -17,10 +17,8 @@ export const Login: React.FC<RouteComponentProps> = () => {
     const [state, setState] = useState<LoginState>({});
     const {username, password} = state;
     const handleLogin = () => {
-        log('handleLogin...');
         login?.(username, password);
     };
-    log('render');
     if (isAuthenticated) {
         return <Redirect to={{pathname: '/'}}/>
     }

@@ -1,24 +1,32 @@
 import React, {useContext, useState} from 'react';
 import {Redirect, RouteComponentProps} from 'react-router';
 import {
-    IonButton, IonCheckbox,
+    IonButton,
     IonContent,
     IonFab,
     IonFabButton,
     IonHeader,
-    IonIcon, IonInfiniteScroll, IonInfiniteScrollContent,
+    IonIcon,
+    IonInfiniteScroll,
+    IonInfiniteScrollContent,
     IonList,
     IonLoading,
-    IonPage, IonRow, IonSearchbar, IonSelect, IonSelectOption,
+    IonPage,
+    IonSearchbar,
+    IonSelect,
+    IonSelectOption,
     IonTitle,
-    IonToolbar, useIonViewDidEnter, useIonViewWillEnter
+    IonToggle,
+    IonToolbar,
+    useIonViewDidEnter
 } from '@ionic/react';
 import {add} from 'ionicons/icons';
 import Item from './Item';
 import {getLogger} from '../core';
 import {ItemContext} from './ItemProvider';
-import {deleteItem} from "./itemApi";
 import {AuthContext} from "../auth";
+import {useNetwork} from "../utility/useNetwork";
+import Conflict from "../conflicts/Conflict";
 
 const log = getLogger('ItemList');
 // Here starts the magic.
@@ -31,33 +39,33 @@ let searchName: string = '';
 
 const ItemList: React.FC<RouteComponentProps> = ({history}) => {
     const [disableInfiniteScroll, setDisableInfiniteScroll] = useState<boolean>(false);
-    const {items, fetching, fetchingError, _deleteItem, fetchItems, reloadItems} = useContext(ItemContext);
+    const {items, fetching, fetchingError, _deleteItem, saveItem,fetchItems, reloadItems, handleConflicts, conflicts, removeConflict} = useContext(ItemContext);
     const {token, logout} = useContext(AuthContext);
     const [filter, setFilter] = useState<string | undefined>(undefined);
+    const {networkStatus} = useNetwork();
 
     useIonViewDidEnter(async () => {
-        console.log('[useIon] calling fetch');
         remaining--;
-        if(remaining === 0)
+        if (remaining === 0)
             await fetchItems?.(offset, size, undefined, searchName);
     });
 
     async function searchNext($event: CustomEvent<void>) {
         offset = offset + size;
-        console.log('[SearchNext] calling fetch with offset=', offset);
         await fetchItems?.(offset, size, currentVal, searchName);
         ($event.target as HTMLIonInfiniteScrollElement).complete();
     }
-    async function selectVal(val: string){
+
+    async function selectVal(val: string) {
         setFilter(val);
-        if(val === 'any')
+        if (val === 'any')
             currentVal = undefined;
         else
             currentVal = val === "yes";
         await reloadItems?.(offset, size, currentVal, searchName);
     }
 
-    async function typeSearchName(val: string){
+    async function typeSearchName(val: string) {
         searchName = val;
         await reloadItems?.(offset, size, currentVal, searchName);
     }
@@ -66,14 +74,14 @@ const ItemList: React.FC<RouteComponentProps> = ({history}) => {
         logout?.();
         return <Redirect to={{pathname: "/login"}}/>;
     };
-    log('render');
     return (
         <IonPage>
             <IonHeader>
                 <IonToolbar>
                     <IonTitle>My App</IonTitle>
                     <IonButton class="ion-margin-end" onClick={handleLogout}>Logout</IonButton>
-                    <IonSelect value={filter} placeholder={"Select a filter"} onIonChange={e => selectVal(e.detail.value)}>
+                    <IonSelect value={filter} placeholder={"Select a filter"}
+                               onIonChange={e => selectVal(e.detail.value)}>
                         <IonSelectOption value="any">Any</IonSelectOption>
                         <IonSelectOption value="yes">Yes</IonSelectOption>
                         <IonSelectOption value="no">No</IonSelectOption>
@@ -83,17 +91,27 @@ const ItemList: React.FC<RouteComponentProps> = ({history}) => {
                         debounce={1000}
                         onIonChange={e => typeSearchName(e.detail.value!)}>
                     </IonSearchbar>
+
+                    <div>Network status: <IonToggle disabled checked={networkStatus.connected}/></div>
+                    {conflicts && conflicts.length > 0 && <div>Avem {conflicts?.length} conflicte</div>}
                 </IonToolbar>
             </IonHeader>
             <IonContent fullscreen>
                 <IonLoading isOpen={fetching} message="Fetching items"/>
-                {items && (
+                {items && (!conflicts || conflicts.length === 0) && (
                     <IonList>
                         {
                             items.map(({_id, name, description, isGood, calories}) =>
-                                <Item key={_id} _id={_id} name={name} description={description} isGood={isGood} calories={calories}
+                                <Item key={_id} _id={_id} name={name} description={description} isGood={isGood}
+                                      calories={calories}
                                       onEdit={_id => history.push(`/item/${_id}`)} onDelete={_id => {
-                                    _deleteItem && _deleteItem({_id: _id, name: name, description: description, isGood: isGood, calories: calories});
+                                    _deleteItem && _deleteItem({
+                                        _id: _id,
+                                        name: name,
+                                        description: description,
+                                        isGood: isGood,
+                                        calories: calories
+                                    });
                                 }}/>
                             )
                         }
@@ -104,6 +122,15 @@ const ItemList: React.FC<RouteComponentProps> = ({history}) => {
                             </IonInfiniteScrollContent>
                         </IonInfiniteScroll>
 
+                    </IonList>
+                )}
+                {conflicts && conflicts.length > 0 && (
+                    <IonList>
+                        {
+                            conflicts.map(({previousRecipe, newRecipe}) =>
+                                <Conflict previousRecipe={previousRecipe} newRecipe={newRecipe} saveRecipe={saveItem!} removeConflict={removeConflict!}/>
+                            )
+                        }
                     </IonList>
                 )}
                 <IonFab vertical="bottom" horizontal="end" slot="fixed">

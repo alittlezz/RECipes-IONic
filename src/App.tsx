@@ -2,7 +2,7 @@ import React, {useState} from 'react';
 import { Redirect, Route } from 'react-router-dom';
 import {IonApp, IonRouterOutlet, useIonViewWillEnter} from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
-import { ItemEdit, ItemList } from './todo';
+import { ItemEdit, ItemList } from './recipes';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -22,7 +22,7 @@ import '@ionic/react/css/display.css';
 
 /* Theme variables */
 import './theme/variables.css';
-import { ItemProvider } from './todo/ItemProvider';
+import { ItemProvider } from './recipes/ItemProvider';
 import {AuthProvider, Login, PrivateRoute} from "./auth";
 
 const App: React.FC = () => {

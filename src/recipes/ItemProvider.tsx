@@ -2,16 +2,19 @@ import React, {useCallback, useContext, useEffect, useReducer} from 'react';
 import PropTypes from 'prop-types';
 import {getLogger} from '../core';
 import {ItemProps} from './ItemProps';
-import {createItem, deleteItem, getItems, newWebSocket, updateItem} from './itemApi';
+import {createItem, deleteItem, getItems, handleRecipesConflicts, newWebSocket, updateItem} from './itemApi';
 import {AuthContext} from "../auth";
 import {Storage} from "@capacitor/core";
+import {ConflictExt} from "../conflicts/Conflict";
 
 const log = getLogger('ItemProvider');
 
-type SaveItemFn = (item: ItemProps) => Promise<any>;
+export type SaveItemFn = (item: ItemProps) => Promise<any>;
 type DeleteItemFn = (item: ItemProps) => Promise<any>;
 type FetchItemsFn = (offset: number, size: number, isGood: boolean | undefined, searchName: string) => Promise<any>;
 type ReloadItemsFn = (offset: number, size: number, isGood: boolean | undefined, searchName: string) => Promise<any>;
+type ResolveConflictsFn = () => Promise<any>;
+export type RemoveConflictFn = (prevItem: ItemProps) => void;
 
 export interface ItemsState {
     items?: ItemProps[],
@@ -24,7 +27,10 @@ export interface ItemsState {
     deletingError?: Error | null,
     _deleteItem?: DeleteItemFn
     fetchItems?: FetchItemsFn,
-    reloadItems?: ReloadItemsFn
+    reloadItems?: ReloadItemsFn,
+    handleConflicts?: ResolveConflictsFn,
+    conflicts?: ConflictExt[],
+    removeConflict?: RemoveConflictFn
 }
 
 interface ActionProps {
@@ -48,10 +54,27 @@ const DELETE_ITEM_FAILED = 'DELETE_ITEM_FAILED';
 const DELETE_ITEM_SUCCEEDED = 'DELETE_ITEM_SUCCEEDED';
 const SAVE_ITEM_SUCCEEDED = 'SAVE_ITEM_SUCCEEDED';
 const SAVE_ITEM_FAILED = 'SAVE_ITEM_FAILED';
+const UPDATE_CONFLICT_SUCCEEDED = 'UPDATE_CONFLICT_SUCCEEDED';
+const REMOVE_CONFLICT_SUCCEEDED = 'REMOVE_CONFLICT_SUCCEEDED';
 
 const reducer: (state: ItemsState, action: ActionProps) => ItemsState =
     (state, {type, payload}) => {
         switch (type) {
+            case UPDATE_CONFLICT_SUCCEEDED:
+                return {...state, conflicts: payload.conflicts};
+            case REMOVE_CONFLICT_SUCCEEDED:
+                const conflicts = [...(state.conflicts || [])];
+                let idx = -1;
+                for (let i = 0; i < conflicts.length; i++) {
+                    const conflict = conflicts[i];
+                    if(conflict.previousRecipe._id === payload.id){
+                        idx = i;
+                    }
+                }
+                if(idx !== -1){
+                    conflicts.splice(idx, 1);
+                }
+                return {...state, conflicts: conflicts}
             case FETCH_ITEMS_STARTED:
                 return {...state, fetching: true, fetchingError: null};
             case FETCH_ITEMS_SUCCEEDED: {
@@ -78,7 +101,7 @@ const reducer: (state: ItemsState, action: ActionProps) => ItemsState =
             case SAVE_ITEM_FAILED:
                 return {...state, savingError: payload.error, saving: false};
             case DELETE_ITEM_STARTED:
-                return {...state, deletingError: null, deleting:true};
+                return {...state, deletingError: null, deleting: true};
             case DELETE_ITEM_SUCCEEDED: {
                 const items = [...(state.items || [])];
                 const item = payload.item;
@@ -102,70 +125,94 @@ interface ItemProviderProps {
 export const ItemProvider: React.FC<ItemProviderProps> = ({children}) => {
     const {token, _id} = useContext(AuthContext);
     const [state, dispatch] = useReducer(reducer, initialState);
-    const {items, fetching, fetchingError, saving, savingError, deleting, deletingError} = state;
+    const {items, fetching, fetchingError, saving, savingError, deleting, deletingError, conflicts} = state;
     useEffect(getItemsEffect, [token]);
     useEffect(wsEffect, [token]);
     const saveItem = useCallback<SaveItemFn>(saveItemCallback, [token]);
     const _deleteItem = useCallback<DeleteItemFn>(deleteItemCallback, [token]);
-    const value = {items, fetching, fetchingError, saving, savingError, saveItem, deleting, deletingError, _deleteItem, fetchItems, reloadItems};
-    log('returns');
+    const value = {
+        items,
+        fetching,
+        fetchingError,
+        saving,
+        savingError,
+        saveItem,
+        deleting,
+        deletingError,
+        _deleteItem,
+        fetchItems,
+        reloadItems,
+        handleConflicts,
+        conflicts,
+        removeConflict
+    };
     return (
         <ItemContext.Provider value={value}>
             {children}
         </ItemContext.Provider>
     );
 
+    async function removeConflict(prevItem: ItemProps){
+        dispatch({type: REMOVE_CONFLICT_SUCCEEDED, payload: {id: prevItem._id}});
+        dispatch({type: SAVE_ITEM_SUCCEEDED, payload: {item: prevItem}});
+    }
+
+    async function getUserLocalRecipes(isGood: boolean | undefined, searchName: string) {
+        const storageRecipes: any[] = [];
+        await Storage.keys().then(function (allKeys) {
+            allKeys.keys.forEach((key) => {
+                Storage.get({key}).then(function (it) {
+                    try {
+                        const object = JSON.parse(it.value);
+                        let isGoodFilter = true;
+                        if (isGood !== undefined) {
+                            isGoodFilter = object.isGood === isGood;
+                        }
+                        let nameFilter = true;
+                        if (searchName !== '') {
+                            nameFilter = new RegExp(`^${searchName}`).test(object.name);
+                        }
+                        if (String(object.userId) === String(_id) && isGoodFilter && nameFilter)
+                            storageRecipes.push(object);
+                    } catch (e) {
+                    }
+                });
+            })
+        });
+        return storageRecipes;
+    }
+
+    async function handleConflicts() {
+        log('Handling conflicts.....');
+        const storageRecipes = await getUserLocalRecipes(undefined, '');
+        const conflicts = await handleRecipesConflicts(token, storageRecipes);
+        dispatch({type: UPDATE_CONFLICT_SUCCEEDED, payload: {conflicts: conflicts}});
+    }
 
     async function fetchItems(offset: number, size: number, isGood: boolean | undefined, searchName: string) {
-        if(!token?.trim()){
+        if (!token?.trim()) {
             return;
         }
         try {
-            log('fetchItems started');
             dispatch({type: FETCH_ITEMS_STARTED});
             const items = await getItems(token, offset, size, isGood, searchName);
-            log('fetchItems succeeded');
             dispatch({type: FETCH_ITEMS_SUCCEEDED, payload: {items}});
         } catch (error) {
-            log('fetchItems failed');
             alert("OFFLINE!");
-            const storageItems: any[] = [];
-            await Storage.keys().then(function (allKeys) {
-                allKeys.keys.forEach((key) => {
-                    Storage.get({key}).then(function (it) {
-                        try {
-                            const object = JSON.parse(it.value);
-                            let isGoodFilter = true;
-                            if(isGood !== undefined){
-                                isGoodFilter = object.isGood === isGood;
-                            }
-                            let nameFilter = true;
-                            if(searchName !== ''){
-                                nameFilter = new RegExp(`^${searchName}`).test(object.name);
-                            }
-                            if (String(object.userId) === String(_id) && isGoodFilter && nameFilter)
-                                storageItems.push(object);
-                        } catch (e) {
-                        }
-                    });
-                })
-            });
+            const storageItems = await getUserLocalRecipes(isGood, searchName);
             dispatch({type: RELOAD_ITEMS_SUCCEEDED, payload: {items: storageItems}});
         }
     }
 
     async function reloadItems(offset: number, size: number, isGood: boolean | undefined, searchName: string) {
-        if(!token?.trim()){
+        if (!token?.trim()) {
             return;
         }
         try {
-            log(`reloadItems started with searchName = ${searchName}`);
             dispatch({type: FETCH_ITEMS_STARTED});
             const items = await getItems(token, 0, offset + size, isGood, searchName);
-            log('reloadItems succeeded');
             dispatch({type: RELOAD_ITEMS_SUCCEEDED, payload: {items}});
         } catch (error) {
-            log('reloadItems failed');
             alert("OFFLINE!");
             const storageItems: any[] = [];
             await Storage.keys().then(function (allKeys) {
@@ -174,11 +221,11 @@ export const ItemProvider: React.FC<ItemProviderProps> = ({children}) => {
                         try {
                             const object = JSON.parse(it.value);
                             let isGoodFilter = true;
-                            if(isGood !== undefined){
+                            if (isGood !== undefined) {
                                 isGoodFilter = object.isGood === isGood;
                             }
                             let nameFilter = true;
-                            if(searchName !== ''){
+                            if (searchName !== '') {
                                 nameFilter = new RegExp(`^${searchName}`).test(object.name);
                             }
                             if (String(object.userId) === String(_id) && isGoodFilter && nameFilter)
@@ -203,15 +250,21 @@ export const ItemProvider: React.FC<ItemProviderProps> = ({children}) => {
 
     async function saveItemCallback(item: ItemProps) {
         try {
-            log('saveItem started');
             dispatch({type: SAVE_ITEM_STARTED});
-            const savedItem = await (item._id ? updateItem(token, item) : createItem(token, item));
-            log('saveItem succeeded');
-            dispatch({type: SAVE_ITEM_SUCCEEDED, payload: {item: savedItem}});
+            if(!item._id){
+                const savedItem = await createItem(token, item, _id);
+                dispatch({type: SAVE_ITEM_SUCCEEDED, payload: {item: savedItem}});
+            }else {
+                const {savedItem, updated} = await updateItem(token, item);
+                if(updated){
+                    dispatch({type: SAVE_ITEM_SUCCEEDED, payload: {item: savedItem}});
+                }else {
+                    dispatch({type: UPDATE_CONFLICT_SUCCEEDED, payload: {conflicts: [savedItem]}});
+                }
+            }
         } catch (error) {
-            log('saveItem failed');
             alert("OFFLINE!");
-            item._id = item._id ? item._id : String(Date.now())
+            item._id = item._id ? item._id : String(Date.now());
             await Storage.set({
                 key: String(item._id),
                 value: JSON.stringify(item)
@@ -221,25 +274,21 @@ export const ItemProvider: React.FC<ItemProviderProps> = ({children}) => {
     }
 
     async function deleteItemCallback(item: ItemProps) {
-      try {
-        log('deleteItem started');
-        dispatch({type: DELETE_ITEM_STARTED});
-        const deletedItem = await deleteItem(token, item._id as string);
-        log('deleteItem succeeded');
-        dispatch({type: DELETE_ITEM_SUCCEEDED, payload: {item: deletedItem}});
-      } catch (error) {
-        log('deleteItem failed');
-          alert("OFFLINE!");
-          await Storage.remove({
-              key: String(item._id)
-          });
-        dispatch({type: DELETE_ITEM_SUCCEEDED, payload: {item}});
-      }
+        try {
+            dispatch({type: DELETE_ITEM_STARTED});
+            const deletedItem = await deleteItem(token, item._id as string);
+            dispatch({type: DELETE_ITEM_SUCCEEDED, payload: {item: deletedItem}});
+        } catch (error) {
+            alert("OFFLINE!");
+            await Storage.remove({
+                key: String(item._id)
+            });
+            dispatch({type: DELETE_ITEM_SUCCEEDED, payload: {item}});
+        }
     }
 
     function wsEffect() {
         let canceled = false;
-        log('wsEffect - connecting');
         let closeWebSocket: () => void;
         if (token?.trim()) {
             closeWebSocket = newWebSocket(token, message => {
@@ -247,9 +296,7 @@ export const ItemProvider: React.FC<ItemProviderProps> = ({children}) => {
                     return;
                 }
                 const {type, payload: item} = message;
-                console.log('Message', JSON.stringify(message))
-                log(`ws message, item ${type}`);
-                if (type === 'created' || type === 'updated') {
+                if (type === 'created') {
                     dispatch({type: SAVE_ITEM_SUCCEEDED, payload: {item}});
                 } else if (type === 'deleted') {
                     dispatch({type: DELETE_ITEM_SUCCEEDED, payload: {item}});
@@ -257,7 +304,6 @@ export const ItemProvider: React.FC<ItemProviderProps> = ({children}) => {
             });
         }
         return () => {
-            log('wsEffect - disconnecting');
             canceled = true;
             closeWebSocket?.();
         }

@@ -4,4 +4,6 @@ export interface ItemProps {
   description: string;
   isGood: boolean;
   calories: string;
+  userId?: string;
+  version?: number;
 }

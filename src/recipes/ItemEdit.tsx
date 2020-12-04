@@ -27,9 +27,9 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
   const [description, setDescription] = useState('');
   const [calories, setCalories] = useState('');
   const [isGood, setIsGood] = useState(false);
+  const [version, setVersion] = useState(1);
   const [item, setItem] = useState<ItemProps>();
   useEffect(() => {
-    log('useEffect');
     const routeId = match.params._id || '';
     const item = items?.find(it => it._id === routeId);
     setItem(item);
@@ -38,13 +38,13 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
       setDescription(item.description);
       setCalories(item.calories.toString());
       setIsGood(item.isGood);
+      setVersion(item.version!);
     }
   }, [match.params._id, items]);
   const handleSave = () => {
-    const editedItem = item ? { ...item, name, description, isGood, calories } : { name, description, isGood, calories };
+    const editedItem = item ? { ...item, name, description, isGood, calories, version } : { name, description, isGood, calories };
     saveItem && saveItem(editedItem).then(() => history.goBack());
   };
-  log('render');
   return (
     <IonPage>
       <IonHeader>
