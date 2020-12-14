@@ -101,9 +101,9 @@ const ItemList: React.FC<RouteComponentProps> = ({history}) => {
                 {items && (!conflicts || conflicts.length === 0) && (
                     <IonList>
                         {
-                            items.map(({_id, name, description, isGood, calories, photo}) =>
+                            items.map(({_id, name, description, isGood, calories, photo, lat, lng}) =>
                                 <Item key={_id} _id={_id} name={name} description={description} isGood={isGood}
-                                      calories={calories} photo={photo}
+                                      calories={calories} photo={photo} lat={lat} lng={lng}
                                       onEdit={_id => history.push(`/item/${_id}`)} onDelete={_id => {
                                     _deleteItem && _deleteItem({
                                         _id: _id,
@@ -111,7 +111,9 @@ const ItemList: React.FC<RouteComponentProps> = ({history}) => {
                                         description: description,
                                         isGood: isGood,
                                         calories: calories,
-                                        photo: photo
+                                        photo: photo,
+                                        lat: lat,
+                                        lng: lng
                                     });
                                 }}/>
                             )

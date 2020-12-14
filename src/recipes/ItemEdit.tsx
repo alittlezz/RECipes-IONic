@@ -16,6 +16,8 @@ import { ItemContext } from './ItemProvider';
 import { RouteComponentProps } from 'react-router';
 import { ItemProps } from './ItemProps';
 import {usePhotoGallery} from "../photos/usePhotoGallery";
+import {MyMap} from "../maps/MyMap";
+import {useMyLocation} from "../maps/useMyLocation";
 
 const log = getLogger('ItemEdit');
 
@@ -24,6 +26,8 @@ interface ItemEditProps extends RouteComponentProps<{
 }> {}
 
 const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
+  const {myLocation, updateMyPosition} = useMyLocation();
+  const { lat: lat2, lng: lng2 } = myLocation || {}
   const { items, saving, savingError, saveItem } = useContext(ItemContext);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -31,6 +35,8 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
   const [isGood, setIsGood] = useState(false);
   const [version, setVersion] = useState(1);
   const [photo, setPhoto] = useState('');
+  const [lat, setLat] = useState(0);
+  const [lng, setLng] = useState(0);
   const [item, setItem] = useState<ItemProps>();
   const {takePhoto} = usePhotoGallery();
   useEffect(() => {
@@ -43,11 +49,14 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
       setCalories(item.calories.toString());
       setIsGood(item.isGood);
       setPhoto(item.photo);
+      setLat(item.lat);
+      setLng(item.lng);
+      updateMyPosition('current', item.lat, item.lng);
       setVersion(item.version!);
     }
   }, [match.params._id, items]);
   const handleSave = () => {
-    const editedItem = item ? { ...item, name, description, isGood, calories, photo, version } : { name, description, isGood, calories, photo };
+    const editedItem = item ? { ...item, name, description, isGood, calories, photo, lat, lng, version } : { name, description, isGood, calories, photo, lat, lng };
     saveItem && saveItem(editedItem).then(() => history.goBack());
   };
 
@@ -57,6 +66,14 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
       setPhoto('');
     } else {
       setPhoto(image);
+    }
+  }
+
+  function handleMapOnClick() {
+    return (e: any) => {
+      updateMyPosition('current', e.latLng.lat(), e.latLng.lng());
+      setLat(e.latLng.lat());
+      setLng(e.latLng.lng());
     }
   }
 
@@ -83,6 +100,12 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
         <IonInput value={calories} onIonChange={e => setCalories(e.detail.value || '')} />
         {photo && (<img onClick={handlePhotoChange} src={photo} width={'100px'} height={'100px'}/>)}
         {!photo && (<img onClick={handlePhotoChange} src={'https://static.thenounproject.com/png/187803-200.png'} width={'100px'} height={'100px'}/>)}
+        {lat2 && lng2 &&
+        <MyMap
+            lat={lat2}
+            lng={lng2}
+            onMapClick={handleMapOnClick()}
+        />}
         <IonLoading isOpen={saving} />
         {savingError && (
           <div>{savingError.message || 'Failed to save item'}</div>

@@ -5,6 +5,8 @@ export interface ItemProps {
   isGood: boolean;
   calories: string;
   photo: string;
+  lat: number;
+  lng: number;
   userId?: string;
   version?: number;
 }

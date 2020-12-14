@@ -8,10 +8,16 @@ interface ItemPropsExt extends ItemProps {
     onDelete: (id?: string) => void;
 }
 
-const Item: React.FC<ItemPropsExt> = ({_id, name, description, isGood, calories, photo, onEdit, onDelete}) => {
+const Item: React.FC<ItemPropsExt> = ({_id, name, description, isGood, calories, photo, lat, lng, onEdit, onDelete}) => {
+    function onMaps(lat: number, lng: number) {
+        const win = window.open(`https://www.google.ro/maps/@${lat},${lng},14z`, '_blank');
+        win?.focus();
+    }
+
     return (
         <IonItem>
             <IonLabel onClick={() => onEdit(_id)}>{name}</IonLabel>
+            <IonLabel onClick={() => onMaps(lat, lng)}>{lat} {lng}</IonLabel>
             {photo && (<img src={photo} width={'100px'} height={'100px'}/>)}
             {!photo && (<img src={'https://static.thenounproject.com/png/187803-200.png'} width={'100px'} height={'100px'}/>)}
             <IonToggle checked={isGood}></IonToggle>
