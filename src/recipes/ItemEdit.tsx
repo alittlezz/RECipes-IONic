@@ -8,12 +8,14 @@ import {
   IonLoading,
   IonPage,
   IonTitle,
-  IonToolbar
+  IonToolbar,
+    IonImg,
 } from '@ionic/react';
 import { getLogger } from '../core';
 import { ItemContext } from './ItemProvider';
 import { RouteComponentProps } from 'react-router';
 import { ItemProps } from './ItemProps';
+import {usePhotoGallery} from "../photos/usePhotoGallery";
 
 const log = getLogger('ItemEdit');
 
@@ -28,7 +30,9 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
   const [calories, setCalories] = useState('');
   const [isGood, setIsGood] = useState(false);
   const [version, setVersion] = useState(1);
+  const [photo, setPhoto] = useState('');
   const [item, setItem] = useState<ItemProps>();
+  const {takePhoto} = usePhotoGallery();
   useEffect(() => {
     const routeId = match.params._id || '';
     const item = items?.find(it => it._id === routeId);
@@ -38,13 +42,24 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
       setDescription(item.description);
       setCalories(item.calories.toString());
       setIsGood(item.isGood);
+      setPhoto(item.photo);
       setVersion(item.version!);
     }
   }, [match.params._id, items]);
   const handleSave = () => {
-    const editedItem = item ? { ...item, name, description, isGood, calories, version } : { name, description, isGood, calories };
+    const editedItem = item ? { ...item, name, description, isGood, calories, photo, version } : { name, description, isGood, calories, photo };
     saveItem && saveItem(editedItem).then(() => history.goBack());
   };
+
+  async function handlePhotoChange() {
+    const image = await takePhoto();
+    if (!image) {
+      setPhoto('');
+    } else {
+      setPhoto(image);
+    }
+  }
+
   return (
     <IonPage>
       <IonHeader>
@@ -66,6 +81,8 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
         <IonCheckbox checked={isGood} onIonChange={e => setIsGood(e.detail.checked)} />
         <IonTitle>Calories</IonTitle>
         <IonInput value={calories} onIonChange={e => setCalories(e.detail.value || '')} />
+        {photo && (<img onClick={handlePhotoChange} src={photo} width={'100px'} height={'100px'}/>)}
+        {!photo && (<img onClick={handlePhotoChange} src={'https://static.thenounproject.com/png/187803-200.png'} width={'100px'} height={'100px'}/>)}
         <IonLoading isOpen={saving} />
         {savingError && (
           <div>{savingError.message || 'Failed to save item'}</div>
