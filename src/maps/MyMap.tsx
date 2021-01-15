@@ -13,7 +13,7 @@ export const MyMap =
     compose<MyMapProps, any>(
         withProps({
             googleMapURL:
-                `https://maps.googleapis.com/maps/api/js?key=AIzaSyCOPq2W6Y568XIyGzj7UotwebrShWF0uEs&v=3.exp&libraries=geometry,drawing,places`,
+                `https://maps.googleapis.com/maps/api/js?key=${mapsApiKey}&v=3.exp&libraries=geometry,drawing,places`,
             loadingElement: <div style={{ height: `500px`, width:'70%' }} />,
             containerElement: <div style={{ height: `500px`, width:'70%', margin: 'auto' }} />,
             mapElement: <div style={{ height: `500px`, width:'70%',  margin: 'auto'}} />
