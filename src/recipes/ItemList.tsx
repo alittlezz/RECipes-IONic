@@ -136,7 +136,7 @@ const ItemList: React.FC<RouteComponentProps> = ({history}) => {
                         }
                     </IonList>
                 )}
-                <IonFab vertical="bottom" horizontal="end" slot="fixed">
+                <IonFab className="fab" vertical="bottom" horizontal="end" slot="fixed">
                     <IonFabButton onClick={() => history.push('/item')}>
                         <IonIcon icon={add}/>
                     </IonFabButton>

@@ -9,7 +9,7 @@ import {
   IonPage,
   IonTitle,
   IonToolbar,
-    IonImg,
+  IonImg, createAnimation,
 } from '@ionic/react';
 import { getLogger } from '../core';
 import { ItemContext } from './ItemProvider';
@@ -18,6 +18,7 @@ import { ItemProps } from './ItemProps';
 import {usePhotoGallery} from "../photos/usePhotoGallery";
 import {MyMap} from "../maps/MyMap";
 import {useMyLocation} from "../maps/useMyLocation";
+import {MyModal} from "../maps/MyModal";
 
 const log = getLogger('ItemEdit');
 
@@ -57,8 +58,20 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
   }, [match.params._id, items]);
   const handleSave = () => {
     const editedItem = item ? { ...item, name, description, isGood, calories, photo, lat, lng, version } : { name, description, isGood, calories, photo, lat, lng };
-    saveItem && saveItem(editedItem).then(() => history.goBack());
+    saveItem && saveItem(editedItem).then(() => {history.goBack(); addAnimation();});
   };
+
+  function addAnimation() {
+    const el = document.querySelector('.item');
+    console.log(el);
+    if (el) {
+      const animation = createAnimation()
+          .addElement(el)
+          .duration(1000)
+          .fromTo('opacity', '0', '1');
+      animation.play();
+    }
+  }
 
   async function handlePhotoChange() {
     const image = await takePhoto();
@@ -101,11 +114,12 @@ const ItemEdit: React.FC<ItemEditProps> = ({ history, match }) => {
         {photo && (<img onClick={handlePhotoChange} src={photo} width={'100px'} height={'100px'}/>)}
         {!photo && (<img onClick={handlePhotoChange} src={'https://static.thenounproject.com/png/187803-200.png'} width={'100px'} height={'100px'}/>)}
         {lat2 && lng2 &&
+        <MyModal>
         <MyMap
             lat={lat2}
             lng={lng2}
             onMapClick={handleMapOnClick()}
-        />}
+        /></MyModal>}
         <IonLoading isOpen={saving} />
         {savingError && (
           <div>{savingError.message || 'Failed to save item'}</div>
